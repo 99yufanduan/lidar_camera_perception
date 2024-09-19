@@ -1,0 +1,4 @@
+dt_apriltags==3.1.7
+ruamel.yaml==0.18.6
+transforms3d==0.4.2
+ros2_numpy==0.0.4

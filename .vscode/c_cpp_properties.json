@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "browse": {
+                "databaseFilename": "${default}",
+                "limitSymbolsToIncludedHeaders": false
+            },
+            "includePath": [
+                "/opt/ros/humble/include/**",
+                "/opt/ros/humble/include/*",
+                "/usr/include/**",
+                "/usr/include/eigen3/*",
+                "/usr/include/opencv4/*",
+                "/usr/include/pcl-1.12/*",
+                "src/tier4_autoware_utils/include/*",
+                "src/my_point_cloud_preprocessor/include/*",
+                "/home/dyf/library/onnxruntime-linux-x64-1.19.2/include/*"
+            ],
+            "name": "ROS",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/gcc"
+        }
+    ],
+    "version": 4
+}
