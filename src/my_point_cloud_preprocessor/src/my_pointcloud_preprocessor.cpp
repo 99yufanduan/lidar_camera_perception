@@ -436,19 +436,24 @@ public:
         return msg_ptr;
     }
 
-    Eigen::Vector2i getPointCloudIndex(const pcl::PointXYZ &pt)
+    bool isOccupied(const pcl::PointXYZ &pt)
     {
-        return Eigen::Vector2i((int)((pt.x + 27.3519) / 0.05), (int)((pt.y + 57.1731) / 0.05));
-    }
-    bool isOccupied(Eigen::Vector2i index)
-    {
-        if (occupancy_grid_map_.data[index[0], index[1]] == 100)
+        int x_idx = static_cast<int>((pt.x - occupancy_grid_map_.info.origin.position.x) / 0.05);
+        int y_idx = static_cast<int>((pt.y - occupancy_grid_map_.info.origin.position.y) / 0.05);
+        int width = occupancy_grid_map_.info.width;
+        int height = occupancy_grid_map_.info.height;
+        if (x_idx >= 0 && x_idx < width && y_idx >= 0 && y_idx < height)
         {
-            return true;
-        }
-        else
-        {
-            return false;
+            int index = y_idx * width + x_idx;
+
+            if (occupancy_grid_map_.data[index] == 100)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
         }
     }
 
@@ -484,7 +489,7 @@ public:
 
         for (auto pt = transformed_cloud->begin(); pt != transformed_cloud->end(); pt++)
         {
-            if (isOccupied(getPointCloudIndex(*pt)) == false)
+            if (isOccupied(*pt) == false)
             {
                 dst_cloud->push_back(*pt);
             }
@@ -495,8 +500,8 @@ public:
         dst_cloud->height = 1;
         dst_cloud->is_dense = false;
 
-        pcl::io::savePCDFileASCII("/home/dyf/project/lidar_camera_perception_ws/src/my_point_cloud_preprocessor/data", *dst_cloud);
-        std::cout << "pcd saved" << std::endl;
+        // pcl::io::savePCDFileASCII("/home/dyf/project/lidar_camera_perception_ws/src/my_point_cloud_preprocessor/data", *dst_cloud);
+        // std::cout << "pcd saved" << std::endl;
         return dst_cloud;
     }
 

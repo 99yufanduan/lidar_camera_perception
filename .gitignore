@@ -3,3 +3,4 @@ install/
 build/
 src/onnx_runtime/data/yolov5s.onnx
 src/occupancy_grid_map_to_cost_map/data/map.pcd
+push.sh
