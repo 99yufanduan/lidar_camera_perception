@@ -21,6 +21,8 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/common/centroid.h>
 
+#include "pointcloud_common.h"
+
 class PCDToOccupancyGrid : public rclcpp::Node
 {
 public:
@@ -43,7 +45,7 @@ public:
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ground(new pcl::PointCloud<pcl::PointXYZ>);
-        std::string pcd_file = "/home/dyf/project/rosbag/rosbag_0827_imu_wheel_vanjee_南风楼/map.pcd";
+        std::string pcd_file = "/home/dyf/project/rosbag/rosbag2_2024_09_19-17_24_25/map.pcd";
         if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_file, *cloud) == -1)
         {
             RCLCPP_ERROR(this->get_logger(), "Couldn't read file %s", pcd_file.c_str());
@@ -383,6 +385,8 @@ private:
                 }
             }
         }
+        nav_msgs::msg::OccupancyGrid occupancy_grid_before = occupancy_grid_;
+        erode(occupancy_grid_before, occupancy_grid_, 3, 4);
     }
 
     void generatePointCloud2(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud)

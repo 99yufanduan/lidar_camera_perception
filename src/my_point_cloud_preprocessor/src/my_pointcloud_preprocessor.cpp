@@ -30,6 +30,19 @@
 #include <nav2_costmap_2d/nav2_costmap_2d/costmap_2d.hpp>
 #include <pcl_ros/transforms.hpp>
 
+#include <pointcloud_common.h>
+
+struct CropBoxParam
+{
+    float min_x;
+    float max_x;
+    float min_y;
+    float max_y;
+    float min_z;
+    float max_z;
+    bool negative{false};
+};
+
 Eigen::Vector3d getArbitraryOrthogonalVector(const Eigen::Vector3d &input)
 {
     const double x = input.x();
@@ -190,12 +203,21 @@ public:
         occupancy_grid_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/visualization_costmap", 2,
                                                                                           std::bind(&PointCloudSubscriber::gridMaCallback, this, std::placeholders::_1));
 
-        param_.min_x = -5;
-        param_.min_y = -5;
-        param_.min_z = -2;
-        param_.max_x = 5;
-        param_.max_y = 5;
-        param_.max_z = 2;
+        crop_outer_param_.negative = false;
+        crop_outer_param_.min_x = -5;
+        crop_outer_param_.min_y = -5;
+        crop_outer_param_.min_z = -2;
+        crop_outer_param_.max_x = 5;
+        crop_outer_param_.max_y = 5;
+        crop_outer_param_.max_z = 0;
+
+        crop_inner_param_.negative = true;
+        crop_inner_param_.min_x = -0.5;
+        crop_inner_param_.min_y = -0.5;
+        crop_inner_param_.min_z = -0.5;
+        crop_inner_param_.max_x = 0.5;
+        crop_inner_param_.max_y = 0.5;
+        crop_inner_param_.max_z = 0;
 
         // set initial parameters
         int filter_min = 32;
@@ -302,7 +324,7 @@ public:
 
     void crop_box_filter(
         const sensor_msgs::msg::PointCloud2::ConstSharedPtr &input, [[maybe_unused]] const pcl::IndicesPtr &indices,
-        sensor_msgs::msg::PointCloud2 &output)
+        sensor_msgs::msg::PointCloud2 &output, CropBoxParam param)
     {
         output.data.resize(input->data.size());
         Eigen::Vector3f pt(Eigen::Vector3f::Zero());
@@ -310,14 +332,14 @@ public:
         const auto data_size = input->data.size();
         const auto point_step = input->point_step;
         // If inside the cropbox
-        if (!param_.negative)
+        if (!param.negative)
         {
             for (size_t i = 0; i + point_step < data_size; i += point_step)
             {
                 memcpy(pt.data(), &input->data[i], sizeof(float) * 3);
                 if (
-                    param_.min_z < pt.z() && pt.z() < param_.max_z && param_.min_y < pt.y() &&
-                    pt.y() < param_.max_y && param_.min_x < pt.x() && pt.x() < param_.max_x)
+                    param.min_z < pt.z() && pt.z() < param.max_z && param.min_y < pt.y() &&
+                    pt.y() < param.max_y && param.min_x < pt.x() && pt.x() < param.max_x)
                 {
                     memcpy(&output.data[j], &input->data[i], point_step);
                     j += point_step;
@@ -331,8 +353,8 @@ public:
             {
                 memcpy(pt.data(), &input->data[i], sizeof(float) * 3);
                 if (
-                    param_.min_z > pt.z() || pt.z() > param_.max_z || param_.min_y > pt.y() ||
-                    pt.y() > param_.max_y || param_.min_x > pt.x() || pt.x() > param_.max_x)
+                    param.min_z > pt.z() || pt.z() > param.max_z || param.min_y > pt.y() ||
+                    pt.y() > param.max_y || param.min_x > pt.x() || pt.x() > param.max_x)
                 {
                     memcpy(&output.data[j], &input->data[i], point_step);
                     j += point_step;
@@ -350,10 +372,10 @@ public:
         output.width = static_cast<uint32_t>(output.data.size() / output.height / output.point_step);
         output.row_step = static_cast<uint32_t>(output.data.size() / output.height);
         // crop_box_point_cloud_pub_->publish(output);
-        // publishCropBoxPolygon();
+        // publishCropBoxPolygon(param);
     }
 
-    void publishCropBoxPolygon()
+    void publishCropBoxPolygon(CropBoxParam param)
     {
         auto generatePoint = [](double x, double y, double z)
         {
@@ -364,18 +386,18 @@ public:
             return point;
         };
 
-        const double x1 = param_.max_x;
-        const double x2 = param_.min_x;
-        const double x3 = param_.min_x;
-        const double x4 = param_.max_x;
+        const double x1 = param.max_x;
+        const double x2 = param.min_x;
+        const double x3 = param.min_x;
+        const double x4 = param.max_x;
 
-        const double y1 = param_.max_y;
-        const double y2 = param_.max_y;
-        const double y3 = param_.min_y;
-        const double y4 = param_.min_y;
+        const double y1 = param.max_y;
+        const double y2 = param.max_y;
+        const double y3 = param.min_y;
+        const double y4 = param.min_y;
 
-        const double z1 = param_.min_z;
-        const double z2 = param_.max_z;
+        const double z1 = param.min_z;
+        const double z2 = param.max_z;
 
         geometry_msgs::msg::PolygonStamped polygon_msg;
         polygon_msg.header.frame_id = "vanjee_lidar";
@@ -455,6 +477,7 @@ public:
                 return false;
             }
         }
+        return false;
     }
 
     /**
@@ -494,7 +517,6 @@ public:
                 dst_cloud->push_back(*pt);
             }
         }
-
         dst_cloud->header = src_cloud->header;
         dst_cloud->width = dst_cloud->points.size();
         dst_cloud->height = 1;
@@ -508,12 +530,17 @@ public:
 private:
     int pointcloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr points)
     {
+
         pcl::IndicesPtr indice;
-        sensor_msgs::msg::PointCloud2 output;
-        crop_box_filter(points, indice, output);
+
+        sensor_msgs::msg::PointCloud2::Ptr output(new sensor_msgs::msg::PointCloud2);
+        crop_box_filter(points, indice, *output, crop_outer_param_);
+
+        sensor_msgs::msg::PointCloud2 output1;
+        crop_box_filter(output, indice, output1, crop_inner_param_);
 
         sensor_msgs::msg::PointCloud2 output2;
-        passthrough_filter(output, indice, output2);
+        passthrough_filter(output1, indice, output2);
 
         /************************* point cloud undistort *********************/
 
@@ -776,16 +803,7 @@ private:
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr no_static_points_pub_;
 
-    struct CropBoxParam
-    {
-        float min_x;
-        float max_x;
-        float min_y;
-        float max_y;
-        float min_z;
-        float max_z;
-        bool negative{false};
-    } param_;
+    CropBoxParam crop_outer_param_, crop_inner_param_;
 };
 
 int main(int argc, char *argv[])
