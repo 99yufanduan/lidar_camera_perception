@@ -1,0 +1,6 @@
+string map_name
+string filter_name
+
+---
+bool is_success
+string status

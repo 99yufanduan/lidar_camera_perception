@@ -27,7 +27,7 @@ void transformPointcloud(
 
 OccupancyGridMap::OccupancyGridMap(
     const unsigned int cells_size_x, const unsigned int cells_size_y, const float resolution, const int origin_x, const int origin_y)
-    : Costmap2D(cells_size_x, cells_size_y, resolution, origin_x, origin_y, NO_INFORMATION)
+    : Costmap2D(cells_size_x, cells_size_y, resolution, origin_x, origin_y, FREE_SPACE)
 {
 }
 
@@ -186,23 +186,23 @@ void OccupancyGridMap::updateWithPointCloud(
 
     // First step: Initialize cells to the final point with freespace
     constexpr double distance_margin = 1.0;
-    for (size_t bin_index = 0; bin_index < obstacle_pointcloud_angle_bins.size(); ++bin_index)
-    {
-        auto &obstacle_pointcloud_angle_bin = obstacle_pointcloud_angle_bins.at(bin_index);
+    // for (size_t bin_index = 0; bin_index < obstacle_pointcloud_angle_bins.size(); ++bin_index)
+    // {
+    //     auto &obstacle_pointcloud_angle_bin = obstacle_pointcloud_angle_bins.at(bin_index);
 
-        BinInfo end_distance;
-        if (obstacle_pointcloud_angle_bin.empty())
-        {
-            continue;
-        }
-        else
-        {
-            end_distance = obstacle_pointcloud_angle_bin.back();
-        }
-        raytrace(
-            robot_pose.position.x, robot_pose.position.y, end_distance.wx, end_distance.wy,
-            FREE_SPACE);
-    }
+    //     BinInfo end_distance;
+    //     if (obstacle_pointcloud_angle_bin.empty())
+    //     {
+    //         continue;
+    //     }
+    //     else
+    //     {
+    //         end_distance = obstacle_pointcloud_angle_bin.back();
+    //     }
+    //     raytrace(
+    //         robot_pose.position.x, robot_pose.position.y, end_distance.wx, end_distance.wy,
+    //         FREE_SPACE);
+    // }
 
     // Second step: Overwrite occupied cell
     for (size_t bin_index = 0; bin_index < obstacle_pointcloud_angle_bins.size(); ++bin_index)
@@ -213,21 +213,21 @@ void OccupancyGridMap::updateWithPointCloud(
             const auto &source = obstacle_pointcloud_angle_bin.at(dist_index);
             setCellValue(source.wx, source.wy, LETHAL_OBSTACLE);
 
-            if (dist_index + 1 == obstacle_pointcloud_angle_bin.size())
-            {
-                continue;
-            }
+            // if (dist_index + 1 == obstacle_pointcloud_angle_bin.size())
+            // {
+            //     continue;
+            // }
 
-            auto next_obstacle_point_distance = std::abs(
-                obstacle_pointcloud_angle_bin.at(dist_index + 1).range -
-                obstacle_pointcloud_angle_bin.at(dist_index).range);
-            if (next_obstacle_point_distance <= distance_margin)
-            {
-                const auto &source = obstacle_pointcloud_angle_bin.at(dist_index);
-                const auto &target = obstacle_pointcloud_angle_bin.at(dist_index + 1);
-                raytrace(source.wx, source.wy, target.wx, target.wy, LETHAL_OBSTACLE);
-                continue;
-            }
+            // auto next_obstacle_point_distance = std::abs(
+            //     obstacle_pointcloud_angle_bin.at(dist_index + 1).range -
+            //     obstacle_pointcloud_angle_bin.at(dist_index).range);
+            // if (next_obstacle_point_distance <= distance_margin)
+            // {
+            //     const auto &source = obstacle_pointcloud_angle_bin.at(dist_index);
+            //     const auto &target = obstacle_pointcloud_angle_bin.at(dist_index + 1);
+            //     raytrace(source.wx, source.wy, target.wx, target.wy, LETHAL_OBSTACLE);
+            //     continue;
+            // }
         }
     }
 }

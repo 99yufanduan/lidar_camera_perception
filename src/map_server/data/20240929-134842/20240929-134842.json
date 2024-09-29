@@ -1,0 +1,17 @@
+{
+   "mapInfo" : {
+      "free_thresh" : 0.19600000000000001,
+      "height" : 544,
+      "modify_time" : "20240923_183339",
+      "negate" : 0.0,
+      "occupied_thresh" : 0.65000000000000002,
+      "origin" : [ -10.0, -10.0, 0.0 ],
+      "resolution" : 0.05000000074505806,
+      "width" : 544
+   },
+   "points" : null,
+   "tag_points" : [ null ],
+   "user_markers" : [ null ],
+   "virtual_paths" : null,
+   "virtual_walls" : null
+}

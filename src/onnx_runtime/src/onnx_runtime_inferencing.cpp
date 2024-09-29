@@ -75,13 +75,13 @@ private:
         // cv::Mat cv_image = cv::imread("/home/dyf/project/lidar_camera_perception_ws/src/onnx_runtime/data/bus.jpg"); // test_image
 
         std::vector<int64_t> onnx_input_shape = {1, 3, 640, 640}; // NCHW RGB格式
-        cv::Mat preprocessed_image = preprocessImage(image, onnx_input_shape);
+        cv::Mat preprocessed_image = preprocessImage(cv_image, onnx_input_shape);
 
         // 将图像数据转换为一维数组,onnx输入的张量
         std::vector<float> onnx_input_tensor_values(preprocessed_image.begin<float>(), preprocessed_image.end<float>());
 
         // 4. 创建输入张量shape
-        std::vector<int64_t> onnx_input_tensor_shape = {1, 3, input_shape[2], input_shape[3]};
+        std::vector<int64_t> onnx_input_tensor_shape = {1, 3, onnx_input_shape[2], onnx_input_shape[3]};
 
         Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtDeviceAllocator, OrtMemTypeCPU);
 
@@ -92,7 +92,7 @@ private:
 
         const std::array<const char *, 1> inputNames = {input_node_names_[0].c_str()};
 
-        auto output_tensors = session_.Run(Ort::RunOptions{nullptr}, inputNames.data(), &input_tensor, 1, outNames.data(), 1);
+        auto output_tensors = session_.Run(Ort::RunOptions{nullptr}, inputNames.data(), &onnx_input_tensor, 1, outNames.data(), 1);
         float *output_data = output_tensors.front().GetTensorMutableData<float>();
 
         auto output_shape = session_.GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
@@ -140,9 +140,9 @@ private:
         cv::dnn::NMSBoxes(boxes, scores, conf_threshold, nms_threshold, indices);
 
         cv::Mat resized_img;
-        cv::resize(image, resized_img, cv::Size(input_shape[3], input_shape[2]));
+        cv::resize(cv_image, resized_img, cv::Size(onnx_input_shape[3], onnx_input_shape[2]));
 
-        draw_boxes(resized_img, boxes, class_ids, indices);
+        drawBoxes(resized_img, boxes, class_ids, indices);
         // // 显示检测后的图像
         cv::imshow("onnx", resized_img);
         cv::waitKey(1);
@@ -157,10 +157,10 @@ private:
     std::vector<std::string> output_node_names_;
 
 public:
-    onnx_runtime_inferencing(std::shared_ptr<Ort::Env> env, const char *model_path, std::shared_ptr<Ort::SessionOptions> session_options) : Node("onnx_runtime_inferencing"), session_(*env, model_path, *session_options)
+    OnnxRuntimeInferencing(std::shared_ptr<Ort::Env> env, const char *model_path, std::shared_ptr<Ort::SessionOptions> session_options) : Node("onnx_runtime_inferencing"), session_(*env, model_path, *session_options)
     {
         cv::namedWindow("onnx", cv::WINDOW_AUTOSIZE);
-        image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera/color_image", 10, std::bind(&onnx_runtime_inferencing::imageCallback, this, std::placeholders::_1));
+        image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/camera/color_image", 10, std::bind(&OnnxRuntimeInferencing::imageCallback, this, std::placeholders::_1));
 
         int input_nodes_num = session_.GetInputCount();
         int output_nodes_num = session_.GetOutputCount();
@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     // 初始化 ONNX Runtime
     std::shared_ptr<Ort::Env> env = std::make_shared<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "ImageRecognition");
     std::shared_ptr<Ort::SessionOptions> session_options = std::make_shared<Ort::SessionOptions>();
-    rclcpp::spin(std::make_shared<onnx_runtime_inferencing>(env, model_path, session_options));
+    rclcpp::spin(std::make_shared<OnnxRuntimeInferencing>(env, model_path, session_options));
     rclcpp::shutdown();
     return 0;
 }

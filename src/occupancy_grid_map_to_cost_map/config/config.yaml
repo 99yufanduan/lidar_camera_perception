@@ -1,8 +1,0 @@
-pcd_filter_node:
-  ros__parameters:
-    height_threshold: -1.47
-    ground_height_threshold: 0.08
-    radius_search: 0.2
-    min_neighbors_inRadius: 20
-    mean_k: 60
-    stddev_mul_thresh: 1.2

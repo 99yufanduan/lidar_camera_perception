@@ -19,30 +19,6 @@
 
 bool captrue_flag = 1;
 
-// 鼠标回调函数，获取鼠标点击位置的坐标
-void onMouse(int event, int x, int y, int, void *userdata)
-{
-    if (event == cv::EVENT_LBUTTONDOWN)
-    {
-        // 输出点击的坐标
-        std::cout << "Mouse Clicked at: (" << x << ", " << y << ")" << std::endl;
-
-        // 获取传入的图像
-        cv::Mat *img = reinterpret_cast<cv::Mat *>(userdata);
-
-        // 确保坐标在图像范围内
-        if (x >= 0 && x < img->cols && y >= 0 && y < img->rows)
-        {
-            std::cout << "piexl point at (" << x << ", " << y << "): ";
-
-            // 在图像中绘制圆形标记点击位置
-            cv::circle(*img, cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1); // 红色圆，半径为5
-            // 更新显示图像
-            cv::imshow("Image", *img);
-        }
-    }
-}
-
 void executeCommand(const std::string &command)
 {
     std::system(command.c_str());
@@ -123,22 +99,6 @@ private:
         return false;
     }
 
-    // static void mouseCallback(const pcl::visualization::PointPickingEvent &event, void *viewer_void)
-    // {
-    //     pcl::visualization::PCLVisualizer *viewer = static_cast<pcl::visualization::PCLVisualizer *>(viewer_void);
-    //     if (event.getPointIndex() != -1)
-    //     {
-    //         pcl::PointXYZ selected_point;
-    //         event.getPoint(selected_point.x, selected_point.y, selected_point.z);
-
-    //         std::cout << "Clicked point coordinates: "
-    //                   << "x = " << selected_point.x
-    //                   << ", y = " << selected_point.y
-    //                   << ", z = " << selected_point.z
-    //                   << std::endl;
-    //     }
-    // }
-
     // 订阅回调函数
     void pointcloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
@@ -184,20 +144,11 @@ private:
             int kernelSize = 3; // Sobel 算子大小
             cv::Canny(grayImg, edges, lowThreshold, highThreshold, kernelSize);
 
-            // cv::imwrite("src/my_calibration_tools/data/output_raw.jpg", resizedImage);
-            // cv::imwrite("src/my_calibration_tools/data/output_edges.jpg", edges);
-            // system("gimp src/my_calibration_tools/data/output_raw.jpg");
-            // system("gimp src/my_calibration_tools/data/output_edges.jpg");
+            cv::imwrite("src/my_calibration_tools/data/output_raw.jpg", resizedImage);
+            cv::imwrite("src/my_calibration_tools/data/output_edges.jpg", edges);
+            system("gimp src/my_calibration_tools/data/output_raw.jpg");
+            system("gimp src/my_calibration_tools/data/output_edges.jpg");
 
-            // 创建窗口并显示图像
-            cv::namedWindow("Image", cv::WINDOW_AUTOSIZE);
-            cv::imshow("Image", image);
-
-            // 设置鼠标回调函数
-            cv::setMouseCallback("Image", onMouse, &image);
-
-            // 等待按键，按任意键退出
-            cv::waitKey(0);
             exit(0);
         }
 

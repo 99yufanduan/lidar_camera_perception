@@ -2,6 +2,7 @@
 #include "sensor_msgs/msg/point_cloud2.hpp"
 
 #include <geometry_msgs/msg/polygon_stamped.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -31,6 +32,9 @@
 #include <pcl_ros/transforms.hpp>
 
 #include <pointcloud_common.h>
+#include <pcl/kdtree/kdtree.h>                 // pcl::search::KdTree
+#include <pcl/segmentation/extract_clusters.h> // pcl::EuclideanClusterExtraction
+#include <vector>                              // std::vector
 
 struct CropBoxParam
 {
@@ -203,6 +207,11 @@ public:
         occupancy_grid_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>("/visualization_costmap", 2,
                                                                                           std::bind(&PointCloudSubscriber::gridMaCallback, this, std::placeholders::_1));
 
+        person_polygon_pub_ =
+            this->create_publisher<geometry_msgs::msg::PolygonStamped>("/person_polygon", 2);
+
+        marker_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("bounding_boxes", 2);
+
         crop_outer_param_.negative = false;
         crop_outer_param_.min_x = -5;
         crop_outer_param_.min_y = -5;
@@ -212,11 +221,11 @@ public:
         crop_outer_param_.max_z = 0;
 
         crop_inner_param_.negative = true;
-        crop_inner_param_.min_x = -0.5;
-        crop_inner_param_.min_y = -0.5;
+        crop_inner_param_.min_x = -0.9;
+        crop_inner_param_.min_y = -0.9;
         crop_inner_param_.min_z = -0.5;
-        crop_inner_param_.max_x = 0.5;
-        crop_inner_param_.max_y = 0.5;
+        crop_inner_param_.max_x = 0.9;
+        crop_inner_param_.max_y = 0.9;
         crop_inner_param_.max_z = 0;
 
         // set initial parameters
@@ -527,6 +536,120 @@ public:
         return dst_cloud;
     }
 
+    // apply euclidean clustering
+    std::vector<pcl::PointIndices> clustering(const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud) const
+    {
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZ>());
+        kdtree->setInputCloud(cloud);
+
+        pcl::EuclideanClusterExtraction<pcl::PointXYZ> extractor;
+        extractor.setClusterTolerance(0.2);
+        extractor.setMinClusterSize(50);
+        extractor.setMaxClusterSize(8192 * 16);
+        extractor.setInputCloud(cloud);
+        extractor.setSearchMethod(kdtree);
+
+        std::vector<pcl::PointIndices> cluster_indices;
+        extractor.extract(cluster_indices);
+
+        return cluster_indices;
+    }
+
+    void publishBoundingBoxes(
+        const std::vector<pcl::PointIndices> &cluster_indices,
+        const pcl::PointCloud<pcl::PointXYZ>::ConstPtr &cloud,
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher)
+    {
+        int cluster_id = 0;
+        visualization_msgs::msg::MarkerArray marker_array;
+        for (const auto &indices : cluster_indices)
+        {
+            // 初始化最小值和最大值
+            float min_x = std::numeric_limits<float>::max();
+            float min_y = std::numeric_limits<float>::max();
+            float min_z = std::numeric_limits<float>::max();
+            float max_x = std::numeric_limits<float>::lowest();
+            float max_y = std::numeric_limits<float>::lowest();
+            float max_z = std::numeric_limits<float>::lowest();
+
+            if (max_x - min_x > 2 || max_y - min_y > 2 || max_z - min_z > 2)
+            {
+                continue;
+            }
+
+            // 遍历聚类中的每个点，找到最小和最大坐标
+            for (const int &idx : indices.indices)
+            {
+                const pcl::PointXYZ &point = cloud->points[idx];
+                if (point.x < min_x)
+                    min_x = point.x;
+                if (point.y < min_y)
+                    min_y = point.y;
+                if (point.z < min_z)
+                    min_z = point.z;
+                if (point.x > max_x)
+                    max_x = point.x;
+                if (point.y > max_y)
+                    max_y = point.y;
+                if (point.z > max_z)
+                    max_z = point.z;
+            }
+
+            // // 创建 PolygonStamped 消息
+            // geometry_msgs::msg::PolygonStamped polygon_msg;
+            // polygon_msg.header.frame_id = "odom"; // 根据你的应用场景调整 frame_id
+            // polygon_msg.header.stamp = rclcpp::Clock().now();
+
+            // // 定义包围框的四个角点 (2D)
+            // geometry_msgs::msg::Point32 p1, p2, p3, p4;
+            // p1.x = min_x;
+            // p1.y = min_y;
+            // p1.z = min_z;
+            // p2.x = max_x;
+            // p2.y = min_y;
+            // p2.z = min_z;
+            // p3.x = max_x;
+            // p3.y = max_y;
+            // p3.z = min_z;
+            // p4.x = min_x;
+            // p4.y = max_y;
+            // p4.z = min_z;
+
+            // // 将这些点加入到 polygon 中
+            // polygon_msg.polygon.points.push_back(p1);
+            // polygon_msg.polygon.points.push_back(p2);
+            // polygon_msg.polygon.points.push_back(p3);
+            // polygon_msg.polygon.points.push_back(p4);
+
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "odom"; // 设置为你的坐标框架
+            marker.header.stamp = this->now();
+            marker.ns = "bounding_boxes";
+            marker.id = cluster_id;
+            marker.type = visualization_msgs::msg::Marker::CUBE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+            marker.pose.position.x = min_x + (max_x - min_x) / 2; // 根据需要设置位置
+            marker.pose.position.y = min_y + (max_y - min_y) / 2; // 根据需要设置位置
+            marker.pose.position.z = min_z + (max_z - min_z) / 2;
+            marker.scale.x = 0.3; // 设置宽度
+            marker.scale.y = 0.3; // 设置高度
+            marker.scale.z = 0.5; // 设置深度
+            marker.color.r = 0.0f;
+            marker.color.g = 1.0f;
+            marker.color.b = 0.0f;
+            marker.color.a = 1.0;                                  // 完全不透明
+            marker.lifetime = rclcpp::Duration::from_seconds(0.5); // 持续时间
+
+            marker_array.markers.push_back(marker);
+
+            // 发布消息
+            // publisher->publish(polygon_msg);
+            marker_pub_->publish(marker_array);
+
+            cluster_id++;
+        }
+    }
+
 private:
     int pointcloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr points)
     {
@@ -670,27 +793,6 @@ private:
         sensor_msgs::msg::PointCloud2 output3;
         ground_filter(output2, indice, output3);
 
-        /**** occupancy grip map ****/
-        // geometry_msgs::msg::Pose pose; // lidar2map ,目前没有使用定位
-        // pose.position.x = 0;
-        // pose.position.y = 0;
-        // pose.position.z = 0;
-        // pose.orientation.w = 1;
-        // pose.orientation.x = 0;
-        // pose.orientation.y = 0;
-        // pose.orientation.z = 0;
-
-        // Create single frame occupancy grid map
-        OccupancyGridMap single_frame_occupancy_grid_map(
-            200,
-            200,
-            0.05, -5, -5); // 200 个栅格 ，每个栅格0.05m，起始点为-5,-5,因为cropbox 保留了10x10
-
-        single_frame_occupancy_grid_map.updateWithPointCloud(output3, pose_.pose.pose);
-        occupancy_grid_map_pub_->publish(OccupancyGridMapToMsgPtr(
-            "odom", points->header.stamp, 0, single_frame_occupancy_grid_map));
-        /**** occupancy grip map ****/
-
         pcl::PointCloud<pcl::PointXYZ>::Ptr output3_pcl(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::fromROSMsg(output3, *output3_pcl);
 
@@ -701,6 +803,31 @@ private:
         pcl::toROSMsg(*output4_pcl, *output4);
         output4->header.frame_id = "odom";
         no_static_points_pub_->publish(*output4);
+
+        /**** occupancy grip map ****/
+        geometry_msgs::msg::Pose pose; // lidar2map ,目前没有使用定位
+        pose.position.x = 0;
+        pose.position.y = 0;
+        pose.position.z = 0;
+        pose.orientation.w = 1;
+        pose.orientation.x = 0;
+        pose.orientation.y = 0;
+        pose.orientation.z = 0;
+
+        // Create single frame occupancy grid map
+        OccupancyGridMap single_frame_occupancy_grid_map(
+            200,
+            200,
+            0.05, pose_.pose.pose.position.x - 5, pose_.pose.pose.position.y - 5); // 200 个栅格 ，每个栅格0.05m，起始点为-5,-5,因为cropbox 保留了10x10
+
+        single_frame_occupancy_grid_map.updateWithPointCloud(*output4, pose);
+        occupancy_grid_map_pub_->publish(OccupancyGridMapToMsgPtr(
+            "odom", points->header.stamp, 0, single_frame_occupancy_grid_map));
+        /**** occupancy grip map ****/
+
+        auto clustering_indice = clustering(output4_pcl);
+        std::cout << "cluster num : " << clustering_indice.size() << std::endl;
+        publishBoundingBoxes(clustering_indice, output4_pcl, marker_pub_);
     }
 
     void onTwistWithCovarianceStamped(const nav_msgs::msg::Odometry::ConstSharedPtr twist_msg)
@@ -802,6 +929,10 @@ private:
     nav_msgs::msg::OccupancyGrid occupancy_grid_map_;
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr no_static_points_pub_;
+
+    rclcpp::Publisher<geometry_msgs::msg::PolygonStamped>::SharedPtr person_polygon_pub_;
+
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 
     CropBoxParam crop_outer_param_, crop_inner_param_;
 };
